@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ec.gob.firmadigital.FirmaEC</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer>
+    <name translatable="no">Vicepresidencia de la República del Ecuador</name>
+  </developer>
+  <name>FirmaEC</name>
+  <summary>Firma electrónica de documentos con certificados digitales del Ecuador</summary>
+  <summary xml:lang="es">Firma electrónica de documentos con certificados digitales del Ecuador</summary>
+  <description>
+    <p>
+      FirmaEC permite firmar documentos electrónicos (PDF, XML, OOXML, ODF)
+      con certificados digitales emitidos por los proveedores de servicios de
+      certificación autorizados del Ecuador. Soporta archivos de certificado
+      .p12/.pfx protegidos con contraseña y tokens criptográficos USB
+      (ePass2003/SafeWeb, bit4id, SafeNet, entre otros).
+    </p>
+    <p>
+      Incluye el cliente transversal, que se invoca automáticamente desde el
+      navegador mediante el protocolo firmaec:// para firmar documentos
+      directamente en los sistemas informáticos gubernamentales.
+    </p>
+  </description>
+  <launchable type="desktop-id">ec.gob.firmadigital.FirmaEC.desktop</launchable>
+  <url type="homepage">https://www.firmadigital.gob.ec/</url>
+  <categories>
+    <category>Office</category>
+  </categories>
+  <releases>
+    <release version="5.2.0" date="2026-08-15">
+      <description>
+        <p>Versión empaquetada como Flatpak a partir del instalador oficial firmaec-5.2.0.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>firmador</binary>
+    <binary>firmaec</binary>
+  </provides>
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+</component>

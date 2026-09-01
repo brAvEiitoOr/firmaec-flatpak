@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FirmaEC
+Comment=Firma electrónica de documentos con certificados digitales del Ecuador
+Comment[es_EC]=FirmaEC StandAlone
+Exec=/app/bin/firmador %u
+Icon=ec.gob.firmadigital.FirmaEC
+Categories=Office;
+Terminal=false
+StartupNotify=false

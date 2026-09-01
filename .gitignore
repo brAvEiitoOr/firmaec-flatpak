@@ -1,0 +1,11 @@
+# Artefactos de build (se regeneran con flatpak-builder)
+/build-dir/
+/.flatpak-builder/
+*.flatpak
+
+# Instalador upstream: se descarga solo vía extra-data al instalar
+*.deb
+
+*.swp
+.DS_Store
+/.omo/

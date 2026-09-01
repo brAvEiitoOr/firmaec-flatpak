@@ -1,0 +1,108 @@
+# ec.gob.firmadigital.FirmaEC — Flatpak de FirmaEC
+#
+# Fuente de los binarios: paquete .deb oficial publicado por el
+# Servicio Nacional de Contrataciones / Ministerio de Producción del Ecuador
+#   https://www.firmadigital.gob.ec/firmaec/firmaec_amd64.deb
+# (redirige al espejo oficial https://mirror.cedia.org.ec/firmaec/firmaec_amd64.deb)
+#
+# Solo x86_64: el JRE incluido en el paquete oficial es Temurin 17 (x86_64).
+app-id: ec.gob.firmadigital.FirmaEC
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: firmador
+separate-locales: false
+
+finish-args:
+  # GUI Swing: no hay toolkit Wayland en JDK 17, corre bajo XWayland
+  - --socket=x11
+  - --share=ipc
+  # Tokens criptográficos USB vía pcscd del host (socket /run/pcscd/pcscd.comm)
+  - --socket=pcsc
+  # Descarga/subida de documentos (cliente transversal) y verificación de versión
+  - --share=network
+  # Abrir y guardar los documentos que se firman
+  - --filesystem=home
+  # Drivers PKCS#11 de tokens instalados en el host (solo lectura, rutas que
+  # FirmaEC busca internamente; el driver más común en Ecuador es ePass2003/SafeWeb)
+  - --filesystem=/usr/lib/libeTPkcs11.so:ro
+  - --filesystem=/usr/lib64/libeTPkcs11.so:ro
+  - --filesystem=/usr/lib/libbit4xpki.so:ro
+  - --filesystem=/usr/lib/bit4id/libbit4xpki.so:ro
+  - --filesystem=/usr/local/SafeNet/lib/libsfntpkcs11.so:ro
+  - --filesystem=/opt/ePass2003_SecurityData_20151225:ro
+  - --filesystem=/opt/SecurityData_Linux:ro
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/pkgconfig
+  - /bin/pcscd
+  - /sbin/pcscd
+  - /bin/pcsc-spy
+  - /share/metainfo/fr.apdu.pcsclite.metainfo.xml
+
+modules:
+  # Librería cliente PC/SC. El runtime de freedesktop no la incluye y el
+  # módulo java.smartcardio del JRE incluido necesita libpcsclite.so.1 para
+  # comunicarse con pcscd (que corre en el host, no dentro del sandbox).
+  - name: pcsc-lite
+    buildsystem: meson
+    builddir: true
+    config-opts:
+      - -Dlibsystemd=false
+      - -Dlibudev=false
+      - -Dlibusb=false
+      - -Dpolkit=false
+      - -Dusb=false
+      - -Dserial=false
+      - -Dipcdir=/run/pcscd
+    sources:
+      - type: archive
+        url: https://pcsclite.apdu.fr/files/pcsc-lite-2.5.1.tar.xz
+        sha256: bfcfe38a20afc49849c6bf55325e38f449fc4b26d3923fdc32b969ae41a8741b
+
+  - name: firmaec
+    buildsystem: simple
+    sources:
+      # Paquete oficial upstream. Se descarga al instalar en /app/extra/ y
+      # apply_extra.sh lo descomprime en el primer arranque (patrón Flathub,
+      # igual que com.google.Chrome).
+      - type: extra-data
+        filename: firmaec.deb
+        only-arches: [x86_64]
+        url: https://www.firmadigital.gob.ec/firmaec/firmaec_amd64.deb
+        sha256: f7eff7f140fb7e04d4e392c4473723974d3dfdc0ee7fb7b61815feefbd35f532
+        size: 102266176
+      - type: file
+        path: apply_extra.sh
+      - type: file
+        path: firmaec-sync.sh
+      - type: file
+        path: ec.gob.firmadigital.FirmaEC.png
+      - type: file
+        path: ec.gob.firmadigital.FirmaEC.desktop
+      - type: file
+        path: ec.gob.firmadigital.FirmaEC.Transversal.desktop
+      - type: file
+        path: ec.gob.firmadigital.FirmaEC.metainfo.xml
+      # Lanzadores: ejecutan una copia escribible del jar (firmaec-sync) para
+      # que el autoupdate oficial (firmador --update) funcione sin sudo; los
+      # originales del .deb apuntan a /usr/share/firmaec
+      - type: script
+        dest-filename: firmador.sh
+        commands:
+          - exec /app/extra/firmaec/jre/bin/java -jar "$(/app/bin/firmaec-sync firmador-jar-with-dependencies.jar)" "$@"
+      - type: script
+        dest-filename: firmaec.sh
+        commands:
+          - exec /app/extra/firmaec/jre/bin/java -jar "$(/app/bin/firmaec-sync cliente-jar-with-dependencies.jar)" "$@"
+    build-commands:
+      - install -Dm755 apply_extra.sh /app/bin/apply_extra
+      - install -Dm755 firmaec-sync.sh /app/bin/firmaec-sync
+      - install -Dm755 firmador.sh /app/bin/firmador
+      - install -Dm755 firmaec.sh /app/bin/firmaec
+      - install -Dm644 ec.gob.firmadigital.FirmaEC.png /app/share/icons/hicolor/256x256/apps/ec.gob.firmadigital.FirmaEC.png
+      - install -Dm644 ec.gob.firmadigital.FirmaEC.desktop /app/share/applications/ec.gob.firmadigital.FirmaEC.desktop
+      - install -Dm644 ec.gob.firmadigital.FirmaEC.Transversal.desktop /app/share/applications/ec.gob.firmadigital.FirmaEC.Transversal.desktop
+      - install -Dm644 ec.gob.firmadigital.FirmaEC.metainfo.xml /app/share/metainfo/ec.gob.firmadigital.FirmaEC.metainfo.xml

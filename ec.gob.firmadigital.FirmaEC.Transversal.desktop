@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=FirmaECTransversal
+Comment=FirmaEC para Sistemas Transversales (manejador del protocolo firmaec://)
+Comment[es_EC]=FirmaEC para Sistemas Transversales
+Exec=/app/bin/firmaec %u
+Icon=ec.gob.firmadigital.FirmaEC
+MimeType=x-scheme-handler/firmaec;
+Terminal=false
+NoDisplay=true
+StartupNotify=false
