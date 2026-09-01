@@ -14,14 +14,16 @@ Temurin 17 incluido).
 | JRE Temurin 17.0.13 | incluido en el `.deb` oficial | Ejecución de los jars |
 | pcsc-lite (solo librería cliente) | compilada en el build | Módulo `java.smartcardio` para tokens USB |
 
-## Instalar en otra máquina (sin compilar)
+## Instalar sin compilar
 
-El bundle single-file incluye todo; solo requiere Flathub para descargar el
-runtime y el `.deb` oficial (extra-data):
+Descargar el bundle del [último release](https://github.com/brAvEiitoOr/firmaec-flatpak/releases/latest) e instalarlo:
 
 ```bash
 flatpak install ./firmaec-5.2.0.flatpak
 ```
+
+El bundle single-file incluye la app; solo requiere Flathub para descargar el
+runtime `org.freedesktop.Platform 25.08` y el `.deb` oficial (extra-data).
 
 ## Cómo funciona el empaquetado
 
