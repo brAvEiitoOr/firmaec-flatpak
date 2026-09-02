@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=JNLP Launcher (Java Web Start)
+GenericName=Lanzador de aplicaciones Java Web Start
+Exec=jnlp-launcher %u
+MimeType=x-scheme-handler/jnlps;x-scheme-handler/jnlp;application/x-java-jnlp-file;
+Terminal=false
+NoDisplay=true
+StartupNotify=false

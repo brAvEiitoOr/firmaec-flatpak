@@ -99,6 +99,47 @@ escritorio no lo resuelve solo, forzar el handler:
 xdg-mime default ec.gob.firmadigital.FirmaEC.Transversal.desktop x-scheme-handler/firmaec
 ```
 
+## Soporte Java Web Start (JNLP)
+
+Algunos sistemas de gestión documental firman mediante clientes Java Web
+Start que el navegador abre con enlaces `jnlp://`/`jnlps://` (archivos
+`.jnlp`). Este repo incluye un mini-lanzador autocontenido que no requiere
+root ni paquetes del sistema:
+
+- Parsea el JNLP (codebase, jars, main-class, argumentos, versión de Java).
+- Descarga y cachea los jars (revalidando tamaño con HEAD; re-descarga si
+  el servidor los actualiza).
+- Gestiona el JRE exigido por el JNLP (p. ej. Java 8) en
+  `~/.local/share/jnlp-launcher/`, descargándolo de Adoptium/Temurin la
+  primera vez.
+- Ejecuta el cliente con `os.execv` (este proceso se convierte en la JVM).
+
+Los clientes JNLP corren en el host con permisos plenos, igual que en el
+Web Start clásico (el jar suele firmarse con `<all-permissions/>`); el
+acceso a tokens (pcscd y drivers PKCS#11 del host) es nativo.
+
+Instalación:
+
+```bash
+mkdir -p ~/.local/bin ~/.local/share/applications
+cp jnlp-launcher ~/.local/bin/ && chmod +x ~/.local/bin/jnlp-launcher
+sed "s|^Exec=.*|Exec=$HOME/.local/bin/jnlp-launcher %u|" \
+  jnlp-launcher.desktop > ~/.local/share/applications/jnlp-launcher.desktop
+update-desktop-database ~/.local/share/applications
+xdg-mime default jnlp-launcher.desktop x-scheme-handler/jnlps \
+  x-scheme-handler/jnlp application/x-java-jnlp-file
+```
+
+Uso directo:
+
+```bash
+jnlp-launcher 'jnlps://servidor.ejemplo/ruta/cliente.jnlp'
+```
+
+En el navegador, el primer clic en un enlace `jnlp(s)://` mostrará el
+selector de aplicaciones una vez; elegir **JNLP Launcher** y marcar
+*recordar*.
+
 ## Limitaciones conocidas
 
 1. **Solo x86_64**: el paquete oficial incluye un JRE Temurin 17 x86_64. No

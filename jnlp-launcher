@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""Mini-lanzador JNLP (Java Web Start) sin dependencias de sistema.
+
+Uso: jnlp-launcher <url-o-archivo.jnlp>
+
+Acepta URLs con esquemas jnlp:// (http) y jnlps:// (https), URLs https
+directas, o rutas locales a archivos .jnlp. Resuelve el codebase, descarga
+y cachea los jars, garantiza un JRE de la versión exigida por el JNLP
+(vía Adoptium/Temurin, gestionado en ~/.local/share/jnlp-launcher) y
+ejecuta la aplicación (os.execv: este proceso se convierte en la JVM).
+"""
+import hashlib
+import os
+import shutil
+import ssl
+import sys
+import tarfile
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import NoReturn
+
+CACHE_ROOT = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "jnlp-launcher"
+DATA_ROOT = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "jnlp-launcher"
+SCHEME_MAP = {"jnlp": "http", "jnlps": "https", "https": "https", "http": "http"}
+SSL_CTX = ssl.create_default_context()
+
+
+def die(msg: str) -> NoReturn:
+    print(f"jnlp-launcher: error: {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def fetch(url: str, dest: Path | None = None) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "jnlp-launcher/1"})
+    with urllib.request.urlopen(req, timeout=60, context=SSL_CTX) as r:
+        data = r.read()
+    if dest is not None:
+        dest.write_bytes(data)
+    return data
+
+
+def resolve_jnlp_source(arg: str) -> str:
+    parsed = urllib.parse.urlparse(arg)
+    if parsed.scheme in SCHEME_MAP:
+        return urllib.parse.ParseResult(
+            scheme=SCHEME_MAP[parsed.scheme], netloc=parsed.netloc,
+            path=parsed.path, params=parsed.params, query=parsed.query,
+            fragment=parsed.fragment,
+        ).geturl()
+    if Path(arg).is_file():
+        return Path(arg).resolve().as_uri()
+    die(f"no es un archivo .jnlp ni una URL jnlp(s):// reconocible: {arg}")
+
+
+def parse_jnlp(jnlp_uri: str) -> dict:
+    if jnlp_uri.startswith("file:"):
+        with urllib.request.urlopen(jnlp_uri) as r:  # noqa: S310 (uri local verificado)
+            root = ET.fromstring(r.read())
+        codebase = str(root.get("codebase") or Path(jnlp_uri[len("file:"):]).parent.as_uri())
+    else:
+        codebase = None
+        req = urllib.request.Request(jnlp_uri, headers={"User-Agent": "jnlp-launcher/1"})
+        with urllib.request.urlopen(req, timeout=60, context=SSL_CTX) as r:
+            final_url = r.geturl()
+            root = ET.fromstring(r.read())
+        base = root.get("codebase")
+        if base:
+            codebase = base if "://" in base else urllib.parse.urljoin(final_url, base)
+        else:
+            codebase = final_url.rsplit("/", 1)[0]
+
+    resources = root.find("resources")
+    if resources is None:
+        die("JNLP sin <resources>")
+    jars = [str(j.get("href")) for j in resources.findall("jar") if j.get("href")]
+    props = [(str(p.get("name")), str(p.get("value"))) for p in resources.findall("property")]
+    java_ver = str(resources.findtext("java") or resources.findtext("j2se") or "").strip()
+
+    app = root.find("application-desc")
+    if app is None:
+        die("solo se soportan JNLP de tipo <application-desc> (no applets)")
+    main_class = str(app.get("main-class") or "").strip()
+    if not main_class:
+        die("JNLP sin main-class")
+    args = [str(a.text) for a in app.findall("argument") if a.text]
+    return {
+        "codebase": codebase.rstrip("/"),
+        "jars": jars,
+        "props": props,
+        "java": java_ver,
+        "main": main_class,
+        "args": args,
+    }
+
+
+def required_major(spec: str) -> int:
+    spec = spec.replace("*", "").replace("+", "").strip()
+    if not spec:
+        return 8
+    head = spec.split(".")[0]
+    return 8 if head == "1" else int(head)
+
+
+def ensure_jre(major: int) -> Path:
+    managed = DATA_ROOT / f"jre{major}"
+    java_bin = managed / "bin" / "java"
+    if java_bin.is_file():
+        return java_bin
+    url = (f"https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64"
+           f"/jre/hotspot/normal/eclipse")
+    print(f"jnlp-launcher: descargando JRE {major} (Adoptium/Temurin)...", file=sys.stderr)
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    staging = DATA_ROOT / ".staging"
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir()
+    tgz = staging / "jre.tar.gz"
+    fetch(url, tgz)
+    with tarfile.open(tgz) as t:
+        t.extractall(staging)  # noqa: S202 (archivo de fuente conocida: API Adoptium)
+    entries = [e for e in staging.iterdir() if e.is_dir()]
+    if len(entries) != 1:
+        die("tarball del JRE con estructura inesperada")
+    if managed.exists():
+        shutil.rmtree(managed)
+    entries[0].rename(managed)
+    shutil.rmtree(staging, ignore_errors=True)
+    if not java_bin.is_file():
+        die(f"JRE instalado pero no se encontró {java_bin}")
+    return java_bin
+
+
+def sync_jar(codebase: str, href: str, cache: Path) -> Path:
+    jar_url = href if "://" in href else f"{codebase}/{href}"
+    dest = cache / (hashlib.md5(jar_url.encode()).hexdigest()[:16] + ".jar")  # noqa: S324 (nombre de caché)
+    meta = cache / (dest.name + ".url")
+    if dest.is_file() and meta.is_file():
+        try:
+            req = urllib.request.Request(jar_url, method="HEAD",
+                                         headers={"User-Agent": "jnlp-launcher/1"})
+            with urllib.request.urlopen(req, timeout=60, context=SSL_CTX) as r:
+                remote_len = r.headers.get("Content-Length")
+                if remote_len is not None and int(remote_len) == dest.stat().st_size:
+                    return dest
+        except OSError:
+            return dest  # sin red para validar: usar caché
+    print(f"jnlp-launcher: descargando {jar_url}", file=sys.stderr)
+    data = fetch(jar_url)
+    cache.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    meta.write_text(jar_url)
+    return dest
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        print(f"uso: {sys.argv[0]} <url-o-archivo.jnlp>", file=sys.stderr)
+        raise SystemExit(2)
+    jnlp_uri = resolve_jnlp_source(sys.argv[1])
+    spec = parse_jnlp(jnlp_uri)
+
+    cache = CACHE_ROOT / hashlib.md5(spec["codebase"].encode()).hexdigest()[:16]  # noqa: S324
+    jars = [sync_jar(spec["codebase"], href, cache) for href in spec["jars"]]
+    if not jars:
+        die("JNLP sin jars")
+
+    java_bin = ensure_jre(required_major(spec["java"]))
+    cmd = [str(java_bin)]
+    cmd += [f"-D{k}={v}" for k, v in spec["props"]]
+    cmd += ["-cp", ":".join(str(j) for j in jars), spec["main"], *spec["args"]]
+    print(f"jnlp-launcher: ejecutando {spec['main']}", file=sys.stderr)
+    os.execv(str(java_bin), cmd)  # noqa: S606 (lanzamiento de la app firmada del JNLP)
+
+
+if __name__ == "__main__":
+    main()
